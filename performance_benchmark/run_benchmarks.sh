@@ -12,6 +12,7 @@ BENCHMARK_SUITE="${BENCHMARK_SUITE:-benchmarks/shootout.suite}"
 PROCESSES="${PROCESSES:-3}"
 ITERATIONS_PER_PROCESS="${ITERATIONS_PER_PROCESS:-3}"
 BASELINE_ENGINE_PATH="${BASELINE_ENGINE_PATH:-}"
+MAX_SUMMARY_LINES="${MAX_SUMMARY_LINES:-160}"
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   cat <<'USAGE'
@@ -24,6 +25,7 @@ Environment variables:
   PROCESSES                   Number of benchmark processes (default: 3)
   ITERATIONS_PER_PROCESS      Iterations per process (default: 3)
   BASELINE_ENGINE_PATH        Optional baseline wasmtime bench API shared library for comparison
+  MAX_SUMMARY_LINES           Number of summary lines copied into report.md (default: 160)
 USAGE
   exit 0
 fi
@@ -104,7 +106,7 @@ popd > /dev/null
 {
   echo "# Wasmtime Performance Benchmark Report"
   echo
-  echo "- Timestamp (UTC): $(date -u '+%Y-%m-%d %H:%M:%S')"
+  echo "- Timestamp (UTC): $(TZ=UTC date '+%Y-%m-%d %H:%M:%S')"
   echo "- Benchmark suite: ${BENCHMARK_SUITE}"
   echo "- Process count: ${PROCESSES}"
   echo "- Iterations per process: ${ITERATIONS_PER_PROCESS}"
@@ -116,7 +118,7 @@ popd > /dev/null
   echo "## Summary Output"
   echo
   echo '```text'
-  sed -n '1,160p' "${TEXT_SUMMARY}"
+  head -n "${MAX_SUMMARY_LINES}" "${TEXT_SUMMARY}"
   echo '```'
   echo
   echo "## Artifacts"
