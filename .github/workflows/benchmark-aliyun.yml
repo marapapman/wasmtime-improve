@@ -148,10 +148,12 @@ jobs:
             --repo "${{ github.repository }}" \
             --title "Performance Benchmark Report — ${TIMESTAMP} (run #${{ github.run_id }})" \
             --body-file "${ISSUE_BODY_FILE}" \
+            --assignee "${{ github.actor }}" \
             --label "performance" || \
           gh issue create \
             --repo "${{ github.repository }}" \
             --title "Performance Benchmark Report — ${TIMESTAMP} (run #${{ github.run_id }})" \
-            --body-file "${ISSUE_BODY_FILE}"
+            --body-file "${ISSUE_BODY_FILE}" \
+            --assignee "${{ github.actor }}"
 
           rm -f "${ISSUE_BODY_FILE}"
