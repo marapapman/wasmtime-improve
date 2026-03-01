@@ -4,6 +4,49 @@ This folder provides an automated benchmark flow for Wasmtime using the
 popular benchmark suites in
 [`bytecodealliance/sightglass`](https://github.com/bytecodealliance/sightglass).
 
+## CI/CD — Aliyun self-hosted runner
+
+The workflow `.github/workflows/benchmark-aliyun.yml` runs benchmarks
+automatically on an Alibaba Cloud (Aliyun) ECS instance configured as a
+GitHub Actions self-hosted runner.
+
+### Runner setup
+
+On the Aliyun ECS instance:
+
+1. Follow the [GitHub self-hosted runner guide](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/adding-self-hosted-runners)
+   to download, configure, and start the runner agent.
+2. When prompted for **additional labels**, add `aliyun` (along with the
+   defaults `self-hosted` and `linux`).
+3. Ensure the following tools are installed on the machine:
+   - `curl`, `tar`, `git`
+   - Rust toolchain (the workflow installs / updates it via the project's
+     `.github/actions/install-rust` action)
+
+### Workflow triggers
+
+| Event | Condition | What happens |
+|---|---|---|
+| `push` to `main` | Always | Full benchmark run; results uploaded as artifacts and written to the job summary |
+| `workflow_dispatch` | Manual trigger from the Actions UI | Configurable benchmark run — specify any branch, tag, or commit SHA in the `ref` input to benchmark a PR or release candidate |
+
+### Customising the run
+
+The workflow accepts four optional inputs when triggered via
+`workflow_dispatch`:
+
+| Input | Default | Description |
+|---|---|---|
+| `ref` | Current branch HEAD | Branch, tag, or commit SHA to benchmark (e.g. a PR head SHA) |
+| `benchmark_suite` | `benchmarks/shootout.suite` | Suite path inside the sightglass checkout |
+| `processes` | `3` | Number of benchmark processes |
+| `iterations_per_process` | `3` | Iterations per process |
+
+To benchmark against a stable baseline engine, set the repository
+**variable** `BASELINE_ENGINE_PATH` (under *Settings → Secrets and variables
+→ Actions → Variables*) to the absolute path of a pre-built
+`libwasmtime_bench_api.so` on the Aliyun runner.
+
 ## What it does
 
 `run_benchmarks.sh` will:
