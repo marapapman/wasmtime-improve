@@ -4,24 +4,16 @@ This folder provides an automated benchmark flow for Wasmtime using the
 popular benchmark suites in
 [`bytecodealliance/sightglass`](https://github.com/bytecodealliance/sightglass).
 
-## CI/CD — Aliyun self-hosted runner
+## CI/CD — GitHub-hosted Ubuntu runners
 
 The workflow `.github/workflows/benchmark-aliyun.yml` runs benchmarks
-automatically on an Alibaba Cloud (Aliyun) ECS instance configured as a
-GitHub Actions self-hosted runner.
+automatically on GitHub-hosted `ubuntu-latest` runners.
+No self-hosted runner setup is required.
 
-### Runner setup
-
-On the Aliyun ECS instance:
-
-1. Follow the [GitHub self-hosted runner guide](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/adding-self-hosted-runners)
-   to download, configure, and start the runner agent.
-2. When prompted for **additional labels**, add `aliyun` (along with the
-   defaults `self-hosted` and `linux`).
-3. Ensure the following tools are installed on the machine:
-   - `curl`, `tar`, `git`
-   - Rust toolchain (the workflow installs / updates it via the project's
-     `.github/actions/install-rust` action)
+After each run the workflow creates a GitHub issue containing the full
+performance report.  GitHub will send a notification to your GitHub inbox
+(and optionally via email) so you receive the results directly in your
+GitHub mailbox.
 
 ### Workflow triggers
 
@@ -45,7 +37,7 @@ The workflow accepts four optional inputs when triggered via
 To benchmark against a stable baseline engine, set the repository
 **variable** `BASELINE_ENGINE_PATH` (under *Settings → Secrets and variables
 → Actions → Variables*) to the absolute path of a pre-built
-`libwasmtime_bench_api.so` on the Aliyun runner.
+`libwasmtime_bench_api.so` available on the runner.
 
 ## What it does
 

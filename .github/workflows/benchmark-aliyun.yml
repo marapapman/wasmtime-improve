@@ -1,14 +1,10 @@
-# Performance benchmark workflow for the Aliyun self-hosted runner.
+# Performance benchmark workflow running on GitHub-hosted Ubuntu runners.
 #
 # Triggers:
 #   1. Every push to `main` (continuous tracking of trunk performance).
 #   2. Manual dispatch from the GitHub Actions UI (workflow_dispatch).
 #      Use the `ref` input to benchmark any branch, tag, or commit SHA
 #      (e.g. the head of a pull request).
-#
-# The runner must be a GitHub Actions self-hosted runner installed on the
-# Aliyun ECS instance and registered with the labels:
-#   self-hosted, linux, aliyun
 #
 # Required repository secrets
 # ---------------------------
@@ -22,7 +18,7 @@
 #                         comparison baseline (leave unset to benchmark
 #                         the current commit only).
 
-name: "Performance Benchmark (Aliyun)"
+name: "Performance Benchmark"
 
 on:
   push:
@@ -51,6 +47,7 @@ on:
 # Minimal token permissions required by this workflow.
 permissions:
   contents: read
+  issues: write
 
 env:
   BENCHMARK_SUITE: ${{ github.event.inputs.benchmark_suite || 'benchmarks/shootout.suite' }}
@@ -59,13 +56,13 @@ env:
 
 # Only one benchmark run per ref at a time; cancel the previous one.
 concurrency:
-  group: benchmark-aliyun-${{ github.ref }}
+  group: benchmark-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   benchmark:
-    name: "Run benchmarks on Aliyun"
-    runs-on: [self-hosted, linux, aliyun]
+    name: "Run benchmarks on GitHub Ubuntu runner"
+    runs-on: ubuntu-latest
 
     steps:
       # ------------------------------------------------------------------
@@ -122,3 +119,39 @@ jobs:
           else
             echo "No benchmark report was generated." >> "${GITHUB_STEP_SUMMARY}"
           fi
+
+      # ------------------------------------------------------------------
+      # 6. Create a GitHub issue with the report so it appears in the
+      #    repository owner's GitHub notifications inbox (mailbox).
+      # ------------------------------------------------------------------
+      - name: "Send report to GitHub mailbox via issue"
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REPORT="performance_benchmark/output/report.md"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          TIMESTAMP="$(date -u '+%Y-%m-%d %H:%M UTC')"
+
+          ISSUE_BODY_FILE="$(mktemp)"
+          {
+            printf 'Triggered by: %s on `%s`\n' "${{ github.event_name }}" "${{ github.ref }}"
+            printf 'Run: %s\n\n' "${RUN_URL}"
+            if [[ -f "${REPORT}" ]]; then
+              cat "${REPORT}"
+            else
+              printf 'No benchmark report was generated. See the workflow run for details.\n'
+            fi
+          } > "${ISSUE_BODY_FILE}"
+
+          gh issue create \
+            --repo "${{ github.repository }}" \
+            --title "Performance Benchmark Report — ${TIMESTAMP} (run #${{ github.run_id }})" \
+            --body-file "${ISSUE_BODY_FILE}" \
+            --label "performance" || \
+          gh issue create \
+            --repo "${{ github.repository }}" \
+            --title "Performance Benchmark Report — ${TIMESTAMP} (run #${{ github.run_id }})" \
+            --body-file "${ISSUE_BODY_FILE}"
+
+          rm -f "${ISSUE_BODY_FILE}"
