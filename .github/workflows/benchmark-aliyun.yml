@@ -1,0 +1,124 @@
+# Performance benchmark workflow for the Aliyun self-hosted runner.
+#
+# Triggers:
+#   1. Every push to `main` (continuous tracking of trunk performance).
+#   2. Manual dispatch from the GitHub Actions UI (workflow_dispatch).
+#      Use the `ref` input to benchmark any branch, tag, or commit SHA
+#      (e.g. the head of a pull request).
+#
+# The runner must be a GitHub Actions self-hosted runner installed on the
+# Aliyun ECS instance and registered with the labels:
+#   self-hosted, linux, aliyun
+#
+# Required repository secrets
+# ---------------------------
+# GITHUB_TOKEN is provided automatically by GitHub Actions.
+# No additional secrets are needed for basic benchmark reporting.
+#
+# Optional repository variables
+# ------------------------------
+# BASELINE_ENGINE_PATH  – absolute path on the runner to a pre-built
+#                         libwasmtime_bench_api.so that serves as the
+#                         comparison baseline (leave unset to benchmark
+#                         the current commit only).
+
+name: "Performance Benchmark (Aliyun)"
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag, or commit SHA to benchmark (defaults to the branch this workflow runs on)"
+        required: false
+        default: ""
+      benchmark_suite:
+        description: "Sightglass benchmark suite path (relative to sightglass root)"
+        required: false
+        default: "benchmarks/shootout.suite"
+      processes:
+        description: "Number of benchmark processes"
+        required: false
+        default: "3"
+      iterations_per_process:
+        description: "Iterations per process"
+        required: false
+        default: "3"
+
+# Minimal token permissions required by this workflow.
+permissions:
+  contents: read
+
+env:
+  BENCHMARK_SUITE: ${{ github.event.inputs.benchmark_suite || 'benchmarks/shootout.suite' }}
+  PROCESSES: ${{ github.event.inputs.processes || '3' }}
+  ITERATIONS_PER_PROCESS: ${{ github.event.inputs.iterations_per_process || '3' }}
+
+# Only one benchmark run per ref at a time; cancel the previous one.
+concurrency:
+  group: benchmark-aliyun-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    name: "Run benchmarks on Aliyun"
+    runs-on: [self-hosted, linux, aliyun]
+
+    steps:
+      # ------------------------------------------------------------------
+      # 1. Checkout the requested ref (or the default push SHA).
+      # ------------------------------------------------------------------
+      - name: "Checkout repository"
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.sha }}
+          submodules: recursive
+
+      # ------------------------------------------------------------------
+      # 2. Install Rust (reuse the project's existing action).
+      # ------------------------------------------------------------------
+      - name: "Install Rust toolchain"
+        uses: ./.github/actions/install-rust
+
+      # ------------------------------------------------------------------
+      # 3. Run the benchmark script.
+      # ------------------------------------------------------------------
+      - name: "Run performance benchmarks"
+        env:
+          BENCHMARK_SUITE: ${{ env.BENCHMARK_SUITE }}
+          PROCESSES: ${{ env.PROCESSES }}
+          ITERATIONS_PER_PROCESS: ${{ env.ITERATIONS_PER_PROCESS }}
+          BASELINE_ENGINE_PATH: ${{ vars.BASELINE_ENGINE_PATH || '' }}
+        run: ./performance_benchmark/run_benchmarks.sh
+
+      # ------------------------------------------------------------------
+      # 4. Upload all generated artifacts for archival.
+      # ------------------------------------------------------------------
+      - name: "Upload benchmark artifacts"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.run_id }}
+          path: |
+            performance_benchmark/output/summary.txt
+            performance_benchmark/output/results.json
+            performance_benchmark/output/report.html
+            performance_benchmark/output/report.md
+          if-no-files-found: warn
+          retention-days: 90
+
+      # ------------------------------------------------------------------
+      # 5. Write the report to the job summary page.
+      # ------------------------------------------------------------------
+      - name: "Write job summary"
+        if: always()
+        run: |
+          REPORT="performance_benchmark/output/report.md"
+          if [[ -f "${REPORT}" ]]; then
+            cat "${REPORT}" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "No benchmark report was generated." >> "${GITHUB_STEP_SUMMARY}"
+          fi
